@@ -10,6 +10,8 @@ SET(folder_source main.cpp)
 
 SET(folder_header)
 
+find_package(YARP)
+
 SOURCE_GROUP("Source Files" FILES ${folder_source})
 SOURCE_GROUP("Header Files" FILES ${folder_header})
 
