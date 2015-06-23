@@ -35,6 +35,8 @@ private:
     yarp::os::Port inport;
     yarp::os::Port outport;
     Port rpc_port;
+    bool reset_offset;
+    double initial_offset[6];
 
 public:
     virtual bool respond(const yarp::os::Bottle &command, yarp::os::Bottle &reply)
@@ -66,7 +68,9 @@ public:
         Bottle *jointsList=0;
         std::string moduleName = "torqueObserver";
         Time::turboBoost();
-        char tmp[255];
+
+        reset_offset = true;
+        for (int i=0; i<6; i++) initial_offset[i]=0.0;
 
        /* options.put("device", "remote_controlboard");
         if(options.check("robot"))
@@ -115,13 +119,23 @@ public:
         ret &= driver.view(idir);
         ret &= driver.view(icmd);
       */
+        char pin[255];
+        sprintf(pin, "/%s/torque:i", moduleName.c_str());
+        inport.open(pin);
+        char pout[255];
+        sprintf(pout, "/%s/torque:o", moduleName.c_str());
+        outport.open(pout);
 
-        sprintf(tmp, "/%s/torque:i", moduleName.c_str());
-        inport.open(tmp);
-
-        sprintf(tmp, "/%s/torque:o", moduleName.c_str());
-        outport.open(tmp);
-
+        bool b1 = yarp::os::Network::connect("/icub/left_leg/analog:o",pin);
+        bool b2 = yarp::os::Network::connect(pout,"/icub/left_leg/analog:o");
+        if (!b1)
+        {
+            yWarning("failed input connection");
+        }
+        if (!b2)
+        {
+            yWarning("failed ouput connection");
+        }
         return true;
     }
 
@@ -139,8 +153,19 @@ public:
         Bottle bin;
         Bottle bout;
         inport.read(bin);
-        double x_torque = fabs(bin.get(3).asDouble());
-        double y_force = fabs(bin.get(1).asDouble());
+        if (reset_offset)
+        {
+            initial_offset[0] = bin.get(0).asDouble();
+            initial_offset[1] = bin.get(1).asDouble();
+            initial_offset[2] = bin.get(2).asDouble();
+            initial_offset[3] = bin.get(3).asDouble();
+            initial_offset[4] = bin.get(4).asDouble();
+            initial_offset[5] = bin.get(5).asDouble();
+            reset_offset = false;
+        }
+
+        double x_torque = fabs(bin.get(3).asDouble()) - initial_offset [3];
+        double y_force = fabs(bin.get(1).asDouble()) - initial_offset[1];
         bout.addInt(2);
         double j_torque = x_torque + y_force * 0.70; //Nm + N * m
         bout.addDouble(j_torque); //j0
